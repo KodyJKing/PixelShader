@@ -1,0 +1,8 @@
+[gd_resource type="ShaderMaterial" load_steps=3 format=2]
+
+[ext_resource path="res://assets/normal_shader.tres" type="Shader" id=1]
+[ext_resource path="res://assets/edge_detection_material.tres" type="Material" id=2]
+
+[resource]
+next_pass = ExtResource( 2 )
+shader = ExtResource( 1 )

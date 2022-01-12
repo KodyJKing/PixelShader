@@ -1,0 +1,86 @@
+[gd_resource type="Shader" format=2]
+
+[resource]
+code = "shader_type spatial;
+render_mode specular_schlick_ggx;
+
+vec3 getNormal(sampler2D normalTex, vec2 uv, vec3 pixelSize, float dx, float dy) {
+	return texture(normalTex, uv + pixelSize.xy * vec2(dx, dy)).xyz;
+}
+
+/*float getAdjustedDepth(mat4 invProjMat, sampler2D depthTex, vec2 uv) {
+  float depth = texture(depthTex, uv).x;
+  return depth;
+  // vec3 ndc = vec3(uv, depth) * 2.0 - 1.0;
+  // vec4 view = invProjMat * vec4(ndc, 1.0);
+  // return -view.z / view.w;
+}*/
+
+float getDepth(mat4 invProjMat, sampler2D depthTex, vec2 uv, vec3 pixelSize, float dx, float dy) {
+	return texture(depthTex, uv + pixelSize.xy * vec2(dx, dy)).x;
+}
+
+float neighborNormalEdgeIndicator(
+	sampler2D normalTex, vec2 uv, vec3 pixelSize, 
+	vec3 normal,
+	float dx, float dy
+) {
+	vec3 neighborNormal = getNormal(normalTex, uv, pixelSize, dx, dy);
+    // Edge pixels should yield to faces closer to the bias direction.
+    vec3 normalEdgeBias = vec3(1., 1., 1.); // This should probably be a parameter.
+    float normalDiff = dot(normal - neighborNormal, normalEdgeBias);
+    float normalIndicator = clamp(smoothstep(-.01, .01, normalDiff), 0.0, 1.0);
+    
+    return length(cross(normal, neighborNormal)) * normalIndicator;
+}
+
+float depthEdgeIndicator(
+	mat4 invProjMat, sampler2D depthTex,
+	vec2 uv, vec3 pixelSize
+) {
+    float depth = getDepth(invProjMat, depthTex, uv, pixelSize, 0., 0.);
+    float diff = 0.0;
+    diff += clamp(getDepth(invProjMat, depthTex, uv, pixelSize,  1.,  0.) - depth, 0.0, 1.0);
+    diff += clamp(getDepth(invProjMat, depthTex, uv, pixelSize, -1.,  0.) - depth, 0.0, 1.0);
+    diff += clamp(getDepth(invProjMat, depthTex, uv, pixelSize,  0.,  1.) - depth, 0.0, 1.0);
+    diff += clamp(getDepth(invProjMat, depthTex, uv, pixelSize,  0., -1.) - depth, 0.0, 1.0);
+    return floor(smoothstep(0.01, 0.02, diff) * 2.) / 2.;
+	//return floor(smoothstep(.5, 1., diff) * 2.) / 2.;
+}
+
+const float normalEdgeTheshold = 0.05;
+const float normalEdgeWidth = 0.001;
+float normalEdgeIndicator(sampler2D normalTex, vec2 uv, vec3 pixelSize) {
+	
+	vec3 normal = getNormal(normalTex, uv, pixelSize, 0.0, 0.0);
+	float indicator = 0.0;
+	
+	indicator += neighborNormalEdgeIndicator(normalTex, uv, pixelSize, normal,  0.0, -1.0);
+	indicator += neighborNormalEdgeIndicator(normalTex, uv, pixelSize, normal,  0.0,  1.0);
+	indicator += neighborNormalEdgeIndicator(normalTex, uv, pixelSize, normal,  1.0,  0.0);
+	indicator += neighborNormalEdgeIndicator(normalTex, uv, pixelSize, normal, -1.0,  0.0);
+	
+	return smoothstep(
+		normalEdgeTheshold - normalEdgeWidth, 
+		normalEdgeTheshold + normalEdgeWidth, 
+		indicator
+    );
+	
+}
+
+const float normalEdgeStrength = 0.3;
+const float depthEdgeStrength = 0.4;
+//const vec3 tmpAlbedo = vec3(0.13725490196078433, 0.4745098039215686, 0.8117647058823529);
+const vec3 tmpAlbedo = vec3(0.5, 0.5, 0.5);
+void fragment() {
+	float pixelWidth = 1.0 / VIEWPORT_SIZE.x;
+	float pixelHeight = 1.0 / VIEWPORT_SIZE.y;
+	vec3 pixelSize = vec3(pixelWidth, pixelHeight, 0.0);
+	
+	float ni = normalEdgeIndicator(SCREEN_TEXTURE, SCREEN_UV, pixelSize);
+	float di = depthEdgeIndicator(INV_PROJECTION_MATRIX, DEPTH_TEXTURE, SCREEN_UV, pixelSize);
+	
+	float coefficient = di > 0.0 ? (1.0 - depthEdgeStrength * di) : (1.0 + normalEdgeStrength * ni);
+
+    ALBEDO.xyz = tmpAlbedo * coefficient;
+}"
