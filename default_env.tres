@@ -7,3 +7,7 @@ background_sky = SubResource( 1 )
 background_color = Color( 1, 1, 1, 1 )
 ambient_light_color = Color( 0.803922, 0.843137, 1, 1 )
 ambient_light_energy = 0.29
+fog_color = Color( 0.501961, 0.6, 0.701961, 1 )
+tonemap_mode = 3
+ss_reflections_roughness = false
+ssao_enabled = true

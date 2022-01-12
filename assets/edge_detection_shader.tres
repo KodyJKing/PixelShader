@@ -2,63 +2,80 @@
 
 [resource]
 code = "shader_type spatial;
-render_mode specular_schlick_ggx;
+render_mode blend_mix,depth_draw_opaque,cull_back,diffuse_burley,specular_schlick_ggx;
+uniform vec4 albedo : hint_color;
+uniform sampler2D texture_albedo : hint_albedo;
+uniform float specular;
+uniform float metallic;
+uniform float roughness : hint_range(0,1);
+uniform float point_size : hint_range(0,128);
+uniform vec3 uv1_scale;
+uniform vec3 uv1_offset;
+uniform vec3 uv2_scale;
+uniform vec3 uv2_offset;
+
+void vertex() {
+	UV=UV*uv1_scale.xy+uv1_offset.xy;
+}
 
 vec3 getNormal(sampler2D normalTex, vec2 uv, vec3 pixelSize, float dx, float dy) {
 	return texture(normalTex, uv + pixelSize.xy * vec2(dx, dy)).xyz;
 }
 
-/*float getAdjustedDepth(mat4 invProjMat, sampler2D depthTex, vec2 uv) {
-  float depth = texture(depthTex, uv).x;
-  return depth;
-  // vec3 ndc = vec3(uv, depth) * 2.0 - 1.0;
-  // vec4 view = invProjMat * vec4(ndc, 1.0);
-  // return -view.z / view.w;
-}*/
-
-float getDepth(mat4 invProjMat, sampler2D depthTex, vec2 uv, vec3 pixelSize, float dx, float dy) {
+// TODO: Use linear depth rather than read straight from the depth texture.
+float getDepth(sampler2D depthTex, vec2 uv, vec3 pixelSize, float dx, float dy) {
 	return texture(depthTex, uv + pixelSize.xy * vec2(dx, dy)).x;
 }
 
 float neighborNormalEdgeIndicator(
-	sampler2D normalTex, vec2 uv, vec3 pixelSize, 
-	vec3 normal,
+	sampler2D depthTex, sampler2D normalTex,
+	vec2 uv, vec3 pixelSize, 
+	float depth, vec3 normal,
 	float dx, float dy
 ) {
 	vec3 neighborNormal = getNormal(normalTex, uv, pixelSize, dx, dy);
+	
     // Edge pixels should yield to faces closer to the bias direction.
     vec3 normalEdgeBias = vec3(1., 1., 1.); // This should probably be a parameter.
     float normalDiff = dot(normal - neighborNormal, normalEdgeBias);
     float normalIndicator = clamp(smoothstep(-.01, .01, normalDiff), 0.0, 1.0);
+	
+	// Only the shallower pixel should detect the normal edge.
+	float depthDiff = getDepth(depthTex, uv, pixelSize, dx, dy) - depth;
+    float depthIndicator = clamp(sign(depthDiff * .25 + .0025), 0.0, 1.0);
     
-    return length(cross(normal, neighborNormal)) * normalIndicator;
+    return length(cross(normal, neighborNormal)) * normalIndicator * depthIndicator;
 }
 
 float depthEdgeIndicator(
-	mat4 invProjMat, sampler2D depthTex,
+	sampler2D depthTex,
 	vec2 uv, vec3 pixelSize
 ) {
-    float depth = getDepth(invProjMat, depthTex, uv, pixelSize, 0., 0.);
+    float depth = getDepth(depthTex, uv, pixelSize, 0., 0.);
     float diff = 0.0;
-    diff += clamp(getDepth(invProjMat, depthTex, uv, pixelSize,  1.,  0.) - depth, 0.0, 1.0);
-    diff += clamp(getDepth(invProjMat, depthTex, uv, pixelSize, -1.,  0.) - depth, 0.0, 1.0);
-    diff += clamp(getDepth(invProjMat, depthTex, uv, pixelSize,  0.,  1.) - depth, 0.0, 1.0);
-    diff += clamp(getDepth(invProjMat, depthTex, uv, pixelSize,  0., -1.) - depth, 0.0, 1.0);
+    diff += clamp(getDepth(depthTex, uv, pixelSize,  1.,  0.) - depth, 0.0, 1.0);
+    diff += clamp(getDepth(depthTex, uv, pixelSize, -1.,  0.) - depth, 0.0, 1.0);
+    diff += clamp(getDepth(depthTex, uv, pixelSize,  0.,  1.) - depth, 0.0, 1.0);
+    diff += clamp(getDepth(depthTex, uv, pixelSize,  0., -1.) - depth, 0.0, 1.0);
     return floor(smoothstep(0.01, 0.02, diff) * 2.) / 2.;
 	//return floor(smoothstep(.5, 1., diff) * 2.) / 2.;
 }
 
 const float normalEdgeTheshold = 0.05;
 const float normalEdgeWidth = 0.001;
-float normalEdgeIndicator(sampler2D normalTex, vec2 uv, vec3 pixelSize) {
+float normalEdgeIndicator(
+	sampler2D depthTex, sampler2D normalTex,
+	vec2 uv, vec3 pixelSize
+) {
 	
 	vec3 normal = getNormal(normalTex, uv, pixelSize, 0.0, 0.0);
-	float indicator = 0.0;
+	float depth = getDepth( depthTex,  uv, pixelSize, 0.0, 0.0);
 	
-	indicator += neighborNormalEdgeIndicator(normalTex, uv, pixelSize, normal,  0.0, -1.0);
-	indicator += neighborNormalEdgeIndicator(normalTex, uv, pixelSize, normal,  0.0,  1.0);
-	indicator += neighborNormalEdgeIndicator(normalTex, uv, pixelSize, normal,  1.0,  0.0);
-	indicator += neighborNormalEdgeIndicator(normalTex, uv, pixelSize, normal, -1.0,  0.0);
+	float indicator = 0.0;
+	indicator += neighborNormalEdgeIndicator(depthTex, normalTex, uv, pixelSize, depth, normal,  0.0, -1.0);
+	indicator += neighborNormalEdgeIndicator(depthTex, normalTex, uv, pixelSize, depth, normal,  0.0,  1.0);
+	indicator += neighborNormalEdgeIndicator(depthTex, normalTex, uv, pixelSize, depth, normal,  1.0,  0.0);
+	indicator += neighborNormalEdgeIndicator(depthTex, normalTex, uv, pixelSize, depth, normal, -1.0,  0.0);
 	
 	return smoothstep(
 		normalEdgeTheshold - normalEdgeWidth, 
@@ -70,17 +87,20 @@ float normalEdgeIndicator(sampler2D normalTex, vec2 uv, vec3 pixelSize) {
 
 const float normalEdgeStrength = 0.3;
 const float depthEdgeStrength = 0.4;
-//const vec3 tmpAlbedo = vec3(0.13725490196078433, 0.4745098039215686, 0.8117647058823529);
-const vec3 tmpAlbedo = vec3(0.5, 0.5, 0.5);
 void fragment() {
 	float pixelWidth = 1.0 / VIEWPORT_SIZE.x;
 	float pixelHeight = 1.0 / VIEWPORT_SIZE.y;
 	vec3 pixelSize = vec3(pixelWidth, pixelHeight, 0.0);
 	
-	float ni = normalEdgeIndicator(SCREEN_TEXTURE, SCREEN_UV, pixelSize);
-	float di = depthEdgeIndicator(INV_PROJECTION_MATRIX, DEPTH_TEXTURE, SCREEN_UV, pixelSize);
+	float ni = normalEdgeIndicator(DEPTH_TEXTURE, SCREEN_TEXTURE, SCREEN_UV, pixelSize);
+	float di = depthEdgeIndicator(DEPTH_TEXTURE, SCREEN_UV, pixelSize);
 	
 	float coefficient = di > 0.0 ? (1.0 - depthEdgeStrength * di) : (1.0 + normalEdgeStrength * ni);
 
-    ALBEDO.xyz = tmpAlbedo * coefficient;
+    vec2 base_uv = UV;
+	vec4 albedo_tex = texture(texture_albedo,base_uv);
+	ALBEDO = albedo.rgb * albedo_tex.rgb * coefficient;
+	METALLIC = metallic;
+	ROUGHNESS = roughness;
+	SPECULAR = specular;
 }"
