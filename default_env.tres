@@ -11,3 +11,6 @@ fog_color = Color( 0.501961, 0.6, 0.701961, 1 )
 tonemap_mode = 3
 ss_reflections_roughness = false
 ssao_enabled = true
+adjustment_brightness = 0.54
+adjustment_contrast = 1.42
+adjustment_saturation = 1.75

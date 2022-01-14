@@ -1,0 +1,22 @@
+[gd_resource type="ShaderMaterial" load_steps=4 format=2]
+
+[ext_resource path="res://assets/normal_shader.tres" type="Shader" id=1]
+[ext_resource path="res://assets/edge_detection_shader.tres" type="Shader" id=2]
+
+[sub_resource type="ShaderMaterial" id=1]
+shader = ExtResource( 2 )
+shader_param/albedo = Color( 0.607843, 0.223529, 0.34902, 1 )
+shader_param/specular = 1.0
+shader_param/metallic = 0.499
+shader_param/roughness = 0.307
+shader_param/point_size = 0.0
+shader_param/uv1_scale = null
+shader_param/uv1_offset = null
+shader_param/uv2_scale = null
+shader_param/uv2_offset = null
+shader_param/normal_edge_strength = 0.3
+shader_param/depth_edge_strength = 0.4
+
+[resource]
+next_pass = SubResource( 1 )
+shader = ExtResource( 1 )

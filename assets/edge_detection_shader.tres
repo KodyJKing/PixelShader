@@ -13,6 +13,8 @@ uniform vec3 uv1_scale;
 uniform vec3 uv1_offset;
 uniform vec3 uv2_scale;
 uniform vec3 uv2_offset;
+uniform float normal_edge_strength : hint_range(0,1) = 0.3;
+uniform float depth_edge_strength : hint_range(0,1) = 0.4;
 
 void vertex() {
 	UV=UV*uv1_scale.xy+uv1_offset.xy;
@@ -36,13 +38,14 @@ float neighborNormalEdgeIndicator(
 	vec3 neighborNormal = getNormal(normalTex, uv, pixelSize, dx, dy);
 	
     // Edge pixels should yield to faces closer to the bias direction.
-    vec3 normalEdgeBias = vec3(1., 1., 1.); // This should probably be a parameter.
+    vec3 normalEdgeBias = vec3(1., 1., 1.); // This should probably be a uniform.
     float normalDiff = dot(normal - neighborNormal, normalEdgeBias);
-    float normalIndicator = clamp(smoothstep(-.01, .01, normalDiff), 0.0, 1.0);
+    float normalIndicator = clamp(smoothstep(-.001, .001, normalDiff), 0.0, 1.0);
 	
 	// Only the shallower pixel should detect the normal edge.
 	float depthDiff = getDepth(depthTex, uv, pixelSize, dx, dy) - depth;
-    float depthIndicator = clamp(sign(depthDiff * .25 + .0025), 0.0, 1.0);
+    //float depthIndicator = clamp(sign(depthDiff), 0.0, 1.0);
+	float depthIndicator = clamp(sign(depthDiff * .5 + .0025), 0.0, 1.0);
     
     return length(cross(normal, neighborNormal)) * normalIndicator * depthIndicator;
 }
@@ -57,8 +60,7 @@ float depthEdgeIndicator(
     diff += clamp(getDepth(depthTex, uv, pixelSize, -1.,  0.) - depth, 0.0, 1.0);
     diff += clamp(getDepth(depthTex, uv, pixelSize,  0.,  1.) - depth, 0.0, 1.0);
     diff += clamp(getDepth(depthTex, uv, pixelSize,  0., -1.) - depth, 0.0, 1.0);
-    return floor(smoothstep(0.01, 0.02, diff) * 2.) / 2.;
-	//return floor(smoothstep(.5, 1., diff) * 2.) / 2.;
+    return smoothstep(0.01, 0.02, diff);
 }
 
 const float normalEdgeTheshold = 0.05;
@@ -85,8 +87,6 @@ float normalEdgeIndicator(
 	
 }
 
-const float normalEdgeStrength = 0.3;
-const float depthEdgeStrength = 0.4;
 void fragment() {
 	float pixelWidth = 1.0 / VIEWPORT_SIZE.x;
 	float pixelHeight = 1.0 / VIEWPORT_SIZE.y;
@@ -95,7 +95,7 @@ void fragment() {
 	float ni = normalEdgeIndicator(DEPTH_TEXTURE, SCREEN_TEXTURE, SCREEN_UV, pixelSize);
 	float di = depthEdgeIndicator(DEPTH_TEXTURE, SCREEN_UV, pixelSize);
 	
-	float coefficient = di > 0.0 ? (1.0 - depthEdgeStrength * di) : (1.0 + normalEdgeStrength * ni);
+	float coefficient = di > 0.0 ? (1.0 - depth_edge_strength * di) : (1.0 + normal_edge_strength * ni);
 
     vec2 base_uv = UV;
 	vec4 albedo_tex = texture(texture_albedo,base_uv);

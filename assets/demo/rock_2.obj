@@ -1,6 +1,6 @@
-# Blender v3.0.0 OBJ File: ''
+# Blender v3.0.0 OBJ File: 'Rock.blend'
 # www.blender.org
-mtllib rock_simplified_2.mtl
+mtllib rock_2.mtl
 o Icosphere
 v -0.158404 -0.424289 0.712977
 v -0.291530 -0.296883 0.911028
