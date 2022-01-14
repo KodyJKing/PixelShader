@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=2]
+[gd_scene load_steps=11 format=2]
 
 [ext_resource path="res://assets/demo/rock_2.obj" type="ArrayMesh" id=1]
 [ext_resource path="res://assets/demo/rock_material.tres" type="Material" id=2]
@@ -6,6 +6,7 @@
 [ext_resource path="res://assets/edge_detection_shader.tres" type="Shader" id=4]
 [ext_resource path="res://assets/demo/gem_material.tres" type="Material" id=5]
 [ext_resource path="res://assets/scripts/Buffers.gd" type="Script" id=6]
+[ext_resource path="res://default_env.tres" type="Environment" id=7]
 
 [sub_resource type="PlaneMesh" id=1]
 
@@ -31,21 +32,22 @@ shader = ExtResource( 3 )
 
 [node name="Camera" type="Camera" parent="."]
 transform = Transform( 1, 0, 0, 0, 0.872752, 0.488164, 0, -0.488164, 0.872752, 0.200194, 11.0555, 13.4269 )
+environment = ExtResource( 7 )
 projection = 1
 size = 19.68
 
-[node name="Ground" type="MeshInstance" parent="."]
+[node name="Ground" type="MeshInstance" parent="." groups=["normal_pass_mesh_instances"]]
 transform = Transform( 16.2482, -2.01166e-07, -4.76837e-07, 6.55651e-07, 16.2482, 8.9407e-08, -4.76837e-07, 2.98023e-08, 16.2482, -0.177414, 0.164341, -1.28314 )
 mesh = SubResource( 1 )
 material/0 = SubResource( 3 )
 
-[node name="Rock" type="MeshInstance" parent="Ground"]
+[node name="Rock" type="MeshInstance" parent="Ground" groups=["normal_pass_mesh_instances"]]
 transform = Transform( -0.402432, 0.184894, 0.130682, 0.190002, 0.420727, -0.0101535, -0.123136, 0.0449238, -0.442757, 0.0567378, 0.134462, 0.0270269 )
 mesh = ExtResource( 1 )
 skeleton = NodePath("../..")
 material/0 = ExtResource( 2 )
 
-[node name="Deposit" type="MeshInstance" parent="Ground/Rock"]
+[node name="Deposit" type="MeshInstance" parent="Ground/Rock" groups=["normal_pass_mesh_instances"]]
 transform = Transform( -0.194505, 0.14123, -0.0823586, 0.098274, 0.160329, -0.254681, -0.0448501, -0.261176, -0.200877, 0.23672, 0.420306, -0.483343 )
 mesh = ExtResource( 1 )
 skeleton = NodePath("../../..")
@@ -64,5 +66,4 @@ omni_attenuation = 0.000150286
 script = ExtResource( 6 )
 
 [node name="NormalPassViewport" type="Viewport" parent="Buffers"]
-size = Vector2( 320, 180 )
 render_target_update_mode = 0
