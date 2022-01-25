@@ -15,3 +15,4 @@ shader_param/uv2_scale = null
 shader_param/uv2_offset = null
 shader_param/normal_edge_strength = 0.3
 shader_param/depth_edge_strength = 0.4
+shader_param/foo = 7.468

@@ -15,6 +15,8 @@ uniform vec3 uv2_scale;
 uniform vec3 uv2_offset;
 uniform float normal_edge_strength : hint_range(0,1) = 0.3;
 uniform float depth_edge_strength : hint_range(0,1) = 0.4;
+uniform sampler2D NORMAL_PASS_TEXTURE;
+uniform sampler2D DEPTH_PASS_TEXTURE;
 
 void vertex() {
 	UV=UV*uv1_scale.xy+uv1_offset.xy;
@@ -24,9 +26,8 @@ vec3 getNormal(sampler2D normalTex, vec2 uv, vec3 pixelSize, float dx, float dy)
 	return texture(normalTex, uv + pixelSize.xy * vec2(dx, dy)).xyz;
 }
 
-// TODO: Use linear depth rather than read straight from the depth texture.
 float getDepth(sampler2D depthTex, vec2 uv, vec3 pixelSize, float dx, float dy) {
-	return texture(depthTex, uv + pixelSize.xy * vec2(dx, dy)).x;
+	return texture(depthTex, uv + pixelSize.xy * vec2(dx, dy)).x * 1000.0;
 }
 
 float neighborNormalEdgeIndicator(
@@ -44,23 +45,39 @@ float neighborNormalEdgeIndicator(
 	
 	// Only the shallower pixel should detect the normal edge.
 	float depthDiff = getDepth(depthTex, uv, pixelSize, dx, dy) - depth;
-    //float depthIndicator = clamp(sign(depthDiff), 0.0, 1.0);
-	float depthIndicator = clamp(sign(depthDiff * .5 + .0025), 0.0, 1.0);
+	float depthIndicator = clamp(sign(depthDiff * .0005 + .0025), 0.0, 1.0);
     
-    return length(cross(normal, neighborNormal)) * normalIndicator * depthIndicator;
+	vec3 nCross = cross(normal, neighborNormal);
+    return dot(nCross, nCross) * normalIndicator * depthIndicator * 1000.0;
 }
 
+vec3 screenToView(vec2 uv, mat4 invProjMat) {
+	vec4 ndc = vec4(uv * 2.0 - 1.0, 1.0, 1.0);
+	vec4 view = invProjMat * ndc;
+	return view.xyz / view.w;
+}
+
+uniform float foo = 10.0;
 float depthEdgeIndicator(
-	sampler2D depthTex,
+	sampler2D depthTex, sampler2D normalTex,
+	mat4 invProjMat,
 	vec2 uv, vec3 pixelSize
 ) {
+	
+	vec3 normal = getNormal(normalTex, uv, pixelSize, 0.0, 0.0);
+	vec3 uvToWorld = screenToView(vec2(1), invProjMat) - screenToView(vec2(0), invProjMat);
+	vec3 pixelToWorld = uvToWorld * pixelSize;
+	vec2 depthChange = foo * pixelToWorld.xy * normal.xy / normal.z;
+	
+	// TODO: Predict expected depth diff based off of normal and only sum the unexpected diff.
     float depth = getDepth(depthTex, uv, pixelSize, 0., 0.);
     float diff = 0.0;
-    diff += clamp(getDepth(depthTex, uv, pixelSize,  1.,  0.) - depth, 0.0, 1.0);
-    diff += clamp(getDepth(depthTex, uv, pixelSize, -1.,  0.) - depth, 0.0, 1.0);
-    diff += clamp(getDepth(depthTex, uv, pixelSize,  0.,  1.) - depth, 0.0, 1.0);
-    diff += clamp(getDepth(depthTex, uv, pixelSize,  0., -1.) - depth, 0.0, 1.0);
-    return smoothstep(0.01, 0.02, diff);
+    diff += max(getDepth(depthTex, uv, pixelSize,  1.,  0.) - depth - depthChange.x, 0.0);
+    diff += max(getDepth(depthTex, uv, pixelSize, -1.,  0.) - depth + depthChange.x, 0.0);
+    diff += max(getDepth(depthTex, uv, pixelSize,  0.,  1.) - depth - depthChange.y, 0.0);
+    diff += max(getDepth(depthTex, uv, pixelSize,  0., -1.) - depth + depthChange.y, 0.0);
+	
+    return step(1.0, diff);
 }
 
 const float normalEdgeTheshold = 0.05;
@@ -69,7 +86,6 @@ float normalEdgeIndicator(
 	sampler2D depthTex, sampler2D normalTex,
 	vec2 uv, vec3 pixelSize
 ) {
-	
 	vec3 normal = getNormal(normalTex, uv, pixelSize, 0.0, 0.0);
 	float depth = getDepth( depthTex,  uv, pixelSize, 0.0, 0.0);
 	
@@ -92,8 +108,8 @@ void fragment() {
 	float pixelHeight = 1.0 / VIEWPORT_SIZE.y;
 	vec3 pixelSize = vec3(pixelWidth, pixelHeight, 0.0);
 	
-	float ni = normalEdgeIndicator(DEPTH_TEXTURE, SCREEN_TEXTURE, SCREEN_UV, pixelSize);
-	float di = depthEdgeIndicator(DEPTH_TEXTURE, SCREEN_UV, pixelSize);
+	float ni = normalEdgeIndicator(DEPTH_PASS_TEXTURE, NORMAL_PASS_TEXTURE, SCREEN_UV, pixelSize);
+	float di = depthEdgeIndicator(DEPTH_PASS_TEXTURE, NORMAL_PASS_TEXTURE, INV_PROJECTION_MATRIX, SCREEN_UV, pixelSize);
 	
 	float coefficient = di > 0.0 ? (1.0 - depth_edge_strength * di) : (1.0 + normal_edge_strength * ni);
 
@@ -101,6 +117,8 @@ void fragment() {
 	vec4 albedo_tex = texture(texture_albedo,base_uv);
 	ALBEDO = albedo.rgb * albedo_tex.rgb * coefficient;
 	METALLIC = metallic;
-	ROUGHNESS = roughness;
+    ROUGHNESS = roughness;
 	SPECULAR = specular;
+	
+	//ALBEDO = texture(NORMAL_TEXTURE, SCREEN_UV).rgb;
 }"

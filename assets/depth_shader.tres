@@ -1,0 +1,10 @@
+[gd_resource type="Shader" format=2]
+
+[resource]
+code = "shader_type spatial;
+render_mode unshaded;
+
+void fragment() {
+	float depth = -VERTEX.z / 1000.0;
+	ALBEDO = vec3(depth);
+}"
